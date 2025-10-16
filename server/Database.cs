@@ -193,16 +193,17 @@ namespace server
         /// Synchronizes all in-memory data with the database for all tables.
         /// </summary>
         /// <returns></returns>
-        public async Task ApplyInMemoryDataToDB()
+        public static async Task ApplyInMemoryDataToDB(Database database)
         {
-            await ConnectToDatabase();
+            await database.ConnectToDatabase();
 
             // Synchronize each table type
-            await SynchronizeStudents();
-            await SynchronizeLessons();
-            await SynchronizeMessages();
-            await SynchronizeStatuses();
-            // Note: Start times and subjects are handled by config, so we skip them here
+            await database.SynchronizeStudents();
+            await database.SynchronizeLessons();
+            await database.SynchronizeMessages();
+            await database.SynchronizeStatuses();
+            await database.SynchronizeStartTimes();
+            await database.SynchronizeSubjects();
 
             Util.Log("In-memory data synchronized with database.", LogLevel.Ok);
 
@@ -373,6 +374,37 @@ namespace server
             await cmd.ExecuteNonQueryAsync();
         }
 
+        /// <summary>
+        /// Inserts a start time with a specific ID into the database.
+        /// </summary>
+        /// <param name="startTime">The start time object to be inserted.</param>
+        private async Task InsertStartTimeWithId(StartTime startTime)
+        {
+            var cmd = connection!.CreateCommand();
+            cmd.CommandText = "INSERT INTO START_TIME (id, time) VALUES ($id, $time)";
+            cmd.Parameters.AddWithValue("$id", startTime.id);
+            cmd.Parameters.AddWithValue("$time", startTime.time);
+
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        /// <summary>
+        /// Inserts a subject with a specific ID into the database.
+        /// </summary>
+        /// <param name="subject">The subject object to be inserted.</param>
+        private async Task InsertSubjectWithId(Subject subject)
+        {
+            var cmd = connection!.CreateCommand();
+            cmd.CommandText = "INSERT INTO SUBJECT (id, name, short, teacher, description) VALUES ($id, $name, $short, $teacher, $description)";
+            cmd.Parameters.AddWithValue("$id", subject.id);
+            cmd.Parameters.AddWithValue("$name", subject.name);
+            cmd.Parameters.AddWithValue("$short", subject.shortcut);
+            cmd.Parameters.AddWithValue("$teacher", subject.teacher);
+            cmd.Parameters.AddWithValue("$description", subject.description);
+
+            await cmd.ExecuteNonQueryAsync();
+        }
+
         #endregion
 
         #region Data Synchronization Methods
@@ -474,6 +506,66 @@ namespace server
                 {
                     // Status has ID but doesn't exist in DB, insert with specific ID
                     await InsertStatusWithId(status);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Synchronizes start times from in-memory list to database.
+        /// </summary>
+        private async Task SynchronizeStartTimes()
+        {
+            var existingIds = await GetExistingIds("START_TIME");
+
+            // Handle items in memory
+            foreach (var startTime in start_times)
+            {
+                if (existingIds.Contains(startTime.id))
+                {
+                    await UpdateStartTime(startTime);
+                }
+                else
+                {
+                    await InsertStartTimeWithId(startTime);
+                }
+            }
+
+            // Remove items from database that are not in memory
+            foreach (var existingId in existingIds)
+            {
+                if (!start_times.Any(st => st.id == existingId))
+                {
+                    await RemoveStartTimeById(existingId);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Synchronizes subjects from in-memory list to database.
+        /// </summary>
+        private async Task SynchronizeSubjects()
+        {
+            var existingIds = await GetExistingIds("SUBJECT");
+
+            // Handle items in memory
+            foreach (var subject in subjects)
+            {
+                if (existingIds.Contains(subject.id))
+                {
+                    await UpdateSubject(subject);
+                }
+                else
+                {
+                    await InsertSubjectWithId(subject);
+                }
+            }
+
+            // Remove items from database that are not in memory
+            foreach (var existingId in existingIds)
+            {
+                if (!subjects.Any(s => s.id == existingId))
+                {
+                    await RemoveSubjectById(existingId);
                 }
             }
         }

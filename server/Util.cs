@@ -54,7 +54,7 @@
             Console.ForegroundColor = level switch
             {
                 LogLevel.Debug => ConsoleColor.Blue,
-                LogLevel.Info => ConsoleColor.White,
+                LogLevel.Info => ConsoleColor.Gray,
                 LogLevel.Warning => ConsoleColor.Yellow,
                 LogLevel.Error => ConsoleColor.Red,
                 LogLevel.Fatal => ConsoleColor.DarkRed,
