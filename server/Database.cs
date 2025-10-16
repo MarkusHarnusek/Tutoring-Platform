@@ -231,98 +231,73 @@ namespace server
         }
 
         /// <summary>
-        /// Inserts a new student into the database.
+        /// Adds a new student to the in-memory list.
         /// </summary>
-        /// <param name="student">The student object to be inserted.</param>
+        /// <param name="student">The student object to be added.</param>
         /// <returns></returns>
         public async Task InsertStudent(Student student)
         {
-            // await ConnectToDatabase();
-            var cmd = connection!.CreateCommand();
-            cmd.CommandText = "INSERT INTO STUDENT (first_name, last_name, student_class, email_address) VALUES ($first_name, $last_name, $student_class, $email_address)";
-            cmd.Parameters.AddWithValue("$first_name", student.first_name);
-            cmd.Parameters.AddWithValue("$last_name", student.last_name);
-            cmd.Parameters.AddWithValue("$student_class", student.student_class);
-            cmd.Parameters.AddWithValue("$email_address", student.email_address);
-
-            await cmd.ExecuteNonQueryAsync();
+            // Generate new ID for the student
+            int newId = students.Count > 0 ? students.Max(s => s.id) + 1 : 1;
+            var newStudent = new Student(newId, student.first_name, student.last_name, student.student_class, student.email_address);
+            students.Add(newStudent);
+            await Task.CompletedTask;
         }
 
         /// <summary>
-        /// Inserts a new lesson into the database.
+        /// Adds a new lesson to the in-memory list.
         /// </summary>
-        /// <param name="lesson">The lesson object to be inserted.</param>
+        /// <param name="lesson">The lesson object to be added.</param>
         /// <returns></returns>
         public async Task InsertLesson(Lesson lesson)
         {
-            // await ConnectToDatabase();
-            var cmd = connection!.CreateCommand();
-            cmd.CommandText = "INSERT INTO LESSON (start_time_id, date, subject_id, student_id, status_id) VALUES ($start_time_id, $date, $subject_id, $student_id, $status_id)";
-            cmd.Parameters.AddWithValue("$start_time_id", lesson.start_time.id);
-            cmd.Parameters.AddWithValue("$date", lesson.date.ToString("yyyy-MM-dd"));
-            cmd.Parameters.AddWithValue("$subject_id", lesson.subject.id);
-            cmd.Parameters.AddWithValue("$student_id", lesson.student.id);
-            cmd.Parameters.AddWithValue("$status_id", lesson.status.id);
-
-            await cmd.ExecuteNonQueryAsync();
+            // Generate new ID for the lesson
+            int newId = lessons.Count > 0 ? lessons.Max(l => l.id) + 1 : 1;
+            var newLesson = new Lesson(newId, lesson.start_time, lesson.date, lesson.subject, lesson.student, lesson.status);
+            lessons.Add(newLesson);
+            await Task.CompletedTask;
         }
 
         /// <summary>
-        /// Inserts a new message into the database.
+        /// Adds a new message to the in-memory list.
         /// </summary>
-        /// <param name="message">The message object to be inserted.</param>
+        /// <param name="message">The message object to be added.</param>
         /// <returns></returns>
         public async Task InsertMessage(Message message)
         {
-            // await ConnectToDatabase();
-            var cmd = connection!.CreateCommand();
-            cmd.CommandText = "INSERT INTO MESSAGE (student_id, lesson_id, title, body) VALUES ($student_id, $lesson_id, $title, $body)";
-            cmd.Parameters.AddWithValue("$student_id", message.student.id);
-            if (message.lesson != null)
-            {
-                cmd.Parameters.AddWithValue("$lesson_id", message.lesson.id);
-            }
-            else
-            {
-                cmd.Parameters.AddWithValue("$lesson_id", DBNull.Value);
-            }
-            cmd.Parameters.AddWithValue("$title", message.title);
-            cmd.Parameters.AddWithValue("$body", message.body);
-
-            await cmd.ExecuteNonQueryAsync();
+            // Generate new ID for the message
+            int newId = messages.Count > 0 ? messages.Max(m => m.id) + 1 : 1;
+            var newMessage = new Message(newId, message.student, message.lesson, message.title, message.body);
+            messages.Add(newMessage);
+            await Task.CompletedTask;
         }
 
         /// <summary>
-        /// Inserts a new start time into the database.
+        /// Adds a new start time to the in-memory list.
         /// </summary>
-        /// <param name="startTime">The start time object to be inserted.</param>
+        /// <param name="startTime">The start time object to be added.</param>
         /// <returns></returns>
         public async Task InsertStartTime(StartTime startTime)
         {
-            // await ConnectToDatabase();
-            var cmd = connection!.CreateCommand();
-            cmd.CommandText = "INSERT INTO START_TIME (time) VALUES ($time)";
-            cmd.Parameters.AddWithValue("$time", startTime.time);
-
-            await cmd.ExecuteNonQueryAsync();
+            // Generate new ID for the start time if it doesn't have one
+            int newId = startTime.id > 0 ? startTime.id : (start_times.Count > 0 ? start_times.Max(st => st.id) + 1 : 1);
+            var newStartTime = new StartTime(newId, startTime.time);
+            start_times.Add(newStartTime);
+            await Task.CompletedTask;
         }
 
         /// <summary>
-        /// Inserts a new subject into the database.
+        /// Adds a new subject to the in-memory list.
         /// </summary>
-        /// <param name="subject">The subject object to be inserted.</param>
+        /// <param name="subject">The subject object to be added.</param>
         /// <returns></returns>
         public async Task InsertSubject(Subject subject)
         {
-            // await ConnectToDatabase();
-            var cmd = connection!.CreateCommand();
-            cmd.CommandText = "INSERT INTO SUBJECT (name, short, teacher, description) VALUES ($name, $short, $teacher, $description)";
-            cmd.Parameters.AddWithValue("$name", subject.name);
-            cmd.Parameters.AddWithValue("$short", subject.shortcut);
-            cmd.Parameters.AddWithValue("$teacher", subject.teacher);
-            cmd.Parameters.AddWithValue("$description", subject.description);
-
-            await cmd.ExecuteNonQueryAsync();
+            // Generate new ID for the subject if it doesn't have one
+            int newId = subject.id > 0 ? subject.id : (subjects.Count > 0 ? subjects.Max(s => s.id) + 1 : 1);
+            var newSubject = new Subject(newId, subject.name, subject.shortcut, subject.teacher, subject.description);
+            subjects.Add(newSubject);
+            await Task.CompletedTask;
         }
 
         /// <summary>
@@ -508,7 +483,7 @@ namespace server
         #region  Data Retrieval Methods
 
         /// <summary>
-        /// Loads all start times from the configuration into the in-memory list and database.
+        /// Loads all start times from the configuration into the in-memory list.
         /// </summary>
         /// <param name="config">The configuration object containing start times.</param>
         private async Task ApplyStartTimesFromConfig(Config config)
@@ -527,14 +502,12 @@ namespace server
                         start_times.Remove(existingStartTime);
                         StartTime updatedStartTime = new StartTime(configStartTime.id, configStartTime.time);
                         start_times.Add(updatedStartTime);
-                        await UpdateStartTime(updatedStartTime);
                     }
                 }
                 else
                 {
                     StartTime newStartTime = new StartTime(configStartTime.id, configStartTime.time);
                     start_times.Add(newStartTime);
-                    await InsertStartTime(newStartTime);
                 }
             }
 
@@ -552,11 +525,10 @@ namespace server
                 foreach (var startTimeToRemove in startTimesToRemove)
                 {
                     start_times.Remove(startTimeToRemove);
-                    await RemoveStartTimeById(startTimeToRemove.id);
                 }
-
-                await ResetAutoIncrementForTable("START_TIME");
             }
+            
+            await Task.CompletedTask;
         }
 
         /// <summary>
@@ -575,7 +547,7 @@ namespace server
         }
 
         /// <summary>
-        /// Apply all the subjects from the configurations into the in-memory list and database.
+        /// Apply all the subjects from the configurations into the in-memory list.
         /// </summary>
         /// <param name="config">The configuration object containing the subjects</param>
         /// <returns></returns>
@@ -598,14 +570,12 @@ namespace server
                         subjects.Remove(existingSubject);
                         Subject updatedSubject = new Subject(configSubject.id, configSubject.name, configSubject.shortcut, configSubject.teacher, configSubject.description);
                         subjects.Add(updatedSubject);
-                        await UpdateSubject(updatedSubject);
                     }
                 }
                 else
                 {
                     Subject newSubject = new Subject(configSubject.id, configSubject.name, configSubject.shortcut, configSubject.teacher, configSubject.description);
                     subjects.Add(newSubject);
-                    await InsertSubject(newSubject);
                 }
             }
 
@@ -623,11 +593,10 @@ namespace server
                 foreach (var subjectToRemove in subjectsToRemove)
                 {
                     subjects.Remove(subjectToRemove);
-                    await RemoveSubjectById(subjectToRemove.id);
                 }
-
-                await ResetAutoIncrementForTable("SUBJECT");
             }
+            
+            await Task.CompletedTask;
         }
 
         /// <summary>
@@ -880,17 +849,17 @@ namespace server
         }
 
         /// <summary>
-        /// Inserts a new status into the database.
+        /// Adds a new status to the in-memory list.
         /// </summary>
-        /// <param name="status">The status object to be inserted.</param>
+        /// <param name="status">The status object to be added.</param>
         /// <returns></returns>
         private async Task InsertStatus(Status status)
         {
-            var cmd = connection!.CreateCommand();
-            cmd.CommandText = "INSERT INTO STATUS (name) VALUES ($name)";
-            cmd.Parameters.AddWithValue("$name", status.name);
-
-            await cmd.ExecuteNonQueryAsync();
+            // Generate new ID for the status if it doesn't have one
+            int newId = status.id > 0 ? status.id : (statuses.Count > 0 ? statuses.Max(s => s.id) + 1 : 1);
+            var newStatus = new Status(newId, status.name);
+            statuses.Add(newStatus);
+            await Task.CompletedTask;
         }
 
         /// <summary>
