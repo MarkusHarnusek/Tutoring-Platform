@@ -403,7 +403,7 @@ namespace server
                             if (!_database.students.Any(s => s.email_address == contactRequest.email))
                             {
                                 student = new Student(-1, contactRequest.first_name, contactRequest.last_name, contactRequest.student_class, contactRequest.email);
-                                await _database.InsertStudent(student);
+                                await _database.InsertStudent(student)  ;
                                 await _database.InsertMessage(new Message(-1, student, null, contactRequest.title, contactRequest.body));
                             }
                             else

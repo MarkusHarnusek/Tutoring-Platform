@@ -33,10 +33,6 @@ namespace server
         /// A list of all messages in the system.
         /// </summary>
         public List<Message> messages { get; }
-        /// <summary>
-        /// A list of all requests in the system.
-        /// </summary>
-        public List<Request> requests { get; }
 
         /// <summary>
         /// A list containing all the above lists for easy iteration.
@@ -77,7 +73,6 @@ namespace server
             statuses = new List<Status>();
             start_times = new List<StartTime>();
             messages = new List<Message>();
-            requests = new List<Request>();
 
             smtp_dom = "";
             smtp_pwd = "";
@@ -91,8 +86,7 @@ namespace server
                 subjects,
                 statuses,
                 start_times,
-                messages,
-                requests
+                messages
             };
 
             // Check if the database exists
@@ -196,6 +190,47 @@ namespace server
         #region  Data Insertion Methods
 
         /// <summary>
+        /// Synchronizes all in-memory data with the database for all tables.
+        /// </summary>
+        /// <returns></returns>
+        public async Task ApplyInMemoryDataToDB()
+        {
+            await ConnectToDatabase();
+
+            // Synchronize each table type
+            await SynchronizeStudents();
+            await SynchronizeLessons();
+            await SynchronizeMessages();
+            await SynchronizeStatuses();
+            // Note: Start times and subjects are handled by config, so we skip them here
+
+            Util.Log("In-memory data synchronized with database.", LogLevel.Ok);
+
+        }
+
+        /// <summary>
+        /// Gets existing IDs from a specified table.
+        /// </summary>
+        /// <param name="tableName">The name of the table to query.</param>
+        /// <returns>A set of existing IDs.</returns>
+        private async Task<HashSet<int>> GetExistingIds(string tableName)
+        {
+            var existingIds = new HashSet<int>();
+            var cmd = connection!.CreateCommand();
+            cmd.CommandText = $"SELECT id FROM {tableName}";
+
+            using (var reader = await cmd.ExecuteReaderAsync())
+            {
+                while (await reader.ReadAsync())
+                {
+                    existingIds.Add(reader.GetInt32(0));
+                }
+            }
+
+            return existingIds;
+        }
+
+        /// <summary>
         /// Inserts a new student into the database.
         /// </summary>
         /// <param name="student">The student object to be inserted.</param>
@@ -258,22 +293,6 @@ namespace server
         }
 
         /// <summary>
-        /// Inserts a new request into the database.
-        /// </summary>
-        /// <param name="request">The request object to be inserted.</param>
-        /// <returns></returns>
-        public async Task InsertRequest(Request request)
-        {
-            // await ConnectToDatabase();
-            var cmd = connection!.CreateCommand();
-            cmd.CommandText = "INSERT INTO REQUEST (ip, time) VALUES ($ip, $time)";
-            cmd.Parameters.AddWithValue("$ip", request.ip);
-            cmd.Parameters.AddWithValue("$time", request.timestamp.ToString("yyyy-MM-dd HH:mm:ss"));
-
-            await cmd.ExecuteNonQueryAsync();
-        }
-
-        /// <summary>
         /// Inserts a new start time into the database.
         /// </summary>
         /// <param name="startTime">The start time object to be inserted.</param>
@@ -304,6 +323,184 @@ namespace server
             cmd.Parameters.AddWithValue("$description", subject.description);
 
             await cmd.ExecuteNonQueryAsync();
+        }
+
+        /// <summary>
+        /// Inserts a student with a specific ID into the database.
+        /// </summary>
+        /// <param name="student">The student object to be inserted.</param>
+        private async Task InsertStudentWithId(Student student)
+        {
+            var cmd = connection!.CreateCommand();
+            cmd.CommandText = "INSERT INTO STUDENT (id, first_name, last_name, student_class, email_address) VALUES ($id, $first_name, $last_name, $student_class, $email_address)";
+            cmd.Parameters.AddWithValue("$id", student.id);
+            cmd.Parameters.AddWithValue("$first_name", student.first_name);
+            cmd.Parameters.AddWithValue("$last_name", student.last_name);
+            cmd.Parameters.AddWithValue("$student_class", student.student_class);
+            cmd.Parameters.AddWithValue("$email_address", student.email_address);
+
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        /// <summary>
+        /// Inserts a lesson with a specific ID into the database.
+        /// </summary>
+        /// <param name="lesson">The lesson object to be inserted.</param>
+        private async Task InsertLessonWithId(Lesson lesson)
+        {
+            var cmd = connection!.CreateCommand();
+            cmd.CommandText = "INSERT INTO LESSON (id, start_time_id, date, subject_id, student_id, status_id) VALUES ($id, $start_time_id, $date, $subject_id, $student_id, $status_id)";
+            cmd.Parameters.AddWithValue("$id", lesson.id);
+            cmd.Parameters.AddWithValue("$start_time_id", lesson.start_time.id);
+            cmd.Parameters.AddWithValue("$date", lesson.date.ToString("yyyy-MM-dd"));
+            cmd.Parameters.AddWithValue("$subject_id", lesson.subject.id);
+            cmd.Parameters.AddWithValue("$student_id", lesson.student.id);
+            cmd.Parameters.AddWithValue("$status_id", lesson.status.id);
+
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        /// <summary>
+        /// Inserts a message with a specific ID into the database.
+        /// </summary>
+        /// <param name="message">The message object to be inserted.</param>
+        private async Task InsertMessageWithId(Message message)
+        {
+            var cmd = connection!.CreateCommand();
+            cmd.CommandText = "INSERT INTO MESSAGE (id, student_id, lesson_id, title, body) VALUES ($id, $student_id, $lesson_id, $title, $body)";
+            cmd.Parameters.AddWithValue("$id", message.id);
+            cmd.Parameters.AddWithValue("$student_id", message.student.id);
+            if (message.lesson != null)
+            {
+                cmd.Parameters.AddWithValue("$lesson_id", message.lesson.id);
+            }
+            else
+            {
+                cmd.Parameters.AddWithValue("$lesson_id", DBNull.Value);
+            }
+            cmd.Parameters.AddWithValue("$title", message.title);
+            cmd.Parameters.AddWithValue("$body", message.body);
+
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        /// <summary>
+        /// Inserts a status with a specific ID into the database.
+        /// </summary>
+        /// <param name="status">The status object to be inserted.</param>
+        private async Task InsertStatusWithId(Status status)
+        {
+            var cmd = connection!.CreateCommand();
+            cmd.CommandText = "INSERT INTO STATUS (id, name) VALUES ($id, $name)";
+            cmd.Parameters.AddWithValue("$id", status.id);
+            cmd.Parameters.AddWithValue("$name", status.name);
+
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        #endregion
+
+        #region Data Synchronization Methods
+
+        /// <summary>
+        /// Synchronizes students from in-memory list to database.
+        /// </summary>
+        private async Task SynchronizeStudents()
+        {
+            // Get existing student IDs from database
+            var existingIds = await GetExistingIds("STUDENT");
+
+            foreach (var student in students)
+            {
+                if (student.id <= 0) // New student without ID
+                {
+                    await InsertStudent(student);
+                }
+                else if (existingIds.Contains(student.id))
+                {
+                    await UpdateStudent(student);
+                }
+                else
+                {
+                    // Student has ID but doesn't exist in DB, insert with specific ID
+                    await InsertStudentWithId(student);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Synchronizes lessons from in-memory list to database.
+        /// </summary>
+        private async Task SynchronizeLessons()
+        {
+            var existingIds = await GetExistingIds("LESSON");
+
+            foreach (var lesson in lessons)
+            {
+                if (lesson.id <= 0) // New lesson without ID
+                {
+                    await InsertLesson(lesson);
+                }
+                else if (existingIds.Contains(lesson.id))
+                {
+                    await UpdateLesson(lesson);
+                }
+                else
+                {
+                    // Lesson has ID but doesn't exist in DB, insert with specific ID
+                    await InsertLessonWithId(lesson);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Synchronizes messages from in-memory list to database.
+        /// </summary>
+        private async Task SynchronizeMessages()
+        {
+            var existingIds = await GetExistingIds("MESSAGE");
+
+            foreach (var message in messages)
+            {
+                if (message.id <= 0) // New message without ID
+                {
+                    await InsertMessage(message);
+                }
+                else if (existingIds.Contains(message.id))
+                {
+                    await UpdateMessage(message);
+                }
+                else
+                {
+                    // Message has ID but doesn't exist in DB, insert with specific ID
+                    await InsertMessageWithId(message);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Synchronizes statuses from in-memory list to database.
+        /// </summary>
+        private async Task SynchronizeStatuses()
+        {
+            var existingIds = await GetExistingIds("STATUS");
+
+            foreach (var status in statuses)
+            {
+                if (status.id <= 0) // New status without ID
+                {
+                    await InsertStatus(status);
+                }
+                else if (existingIds.Contains(status.id))
+                {
+                    await UpdateStatus(status);
+                }
+                else
+                {
+                    // Status has ID but doesn't exist in DB, insert with specific ID
+                    await InsertStatusWithId(status);
+                }
+            }
         }
 
         #endregion
@@ -360,21 +557,6 @@ namespace server
 
                 await ResetAutoIncrementForTable("START_TIME");
             }
-        }
-
-        /// <summary>
-        /// Updates an existing start time in the database.
-        /// </summary>
-        /// <param name="startTime">The start time object to be updated.</param>
-        /// <returns></returns>
-        private async Task UpdateStartTime(StartTime startTime)
-        {
-            var cmd = connection!.CreateCommand();
-            cmd.CommandText = "UPDATE START_TIME SET time = $time WHERE id = $id";
-            cmd.Parameters.AddWithValue("$time", startTime.time);
-            cmd.Parameters.AddWithValue("$id", startTime.id);
-
-            await cmd.ExecuteNonQueryAsync();
         }
 
         /// <summary>
@@ -446,24 +628,6 @@ namespace server
 
                 await ResetAutoIncrementForTable("SUBJECT");
             }
-        }
-
-        /// <summary>
-        /// Updates an existing subject in the database.
-        /// </summary>
-        /// <param name="subject">The subject object to be updated.</param>
-        /// <returns></returns>
-        private async Task UpdateSubject(Subject subject)
-        {
-            var cmd = connection!.CreateCommand();
-            cmd.CommandText = "UPDATE SUBJECT SET name = $name, short = $short, teacher = $teacher, description = $description WHERE id = $id";
-            cmd.Parameters.AddWithValue("$name", subject.name);
-            cmd.Parameters.AddWithValue("$short", subject.shortcut);
-            cmd.Parameters.AddWithValue("$teacher", subject.teacher);
-            cmd.Parameters.AddWithValue("$description", subject.description);
-            cmd.Parameters.AddWithValue("$id", subject.id);
-
-            await cmd.ExecuteNonQueryAsync();
         }
 
         /// <summary>
@@ -693,33 +857,135 @@ namespace server
             }
         }
 
+        #endregion
+
+        #region Data Update Methods
+
         /// <summary>
-        /// Loads all requests from the database into the in-memory list.
+        /// Updates an existing student in the database.
         /// </summary>
+        /// <param name="student">The student object to be updated.</param>
         /// <returns></returns>
-        private async Task LoadRequests()
+        private async Task UpdateStudent(Student student)
         {
-            // await ConnectToDatabase();
             var cmd = connection!.CreateCommand();
-            cmd.CommandText = "SELECT * FROM REQUEST";
+            cmd.CommandText = "UPDATE STUDENT SET first_name = $first_name, last_name = $last_name, student_class = $student_class, email_address = $email_address WHERE id = $id";
+            cmd.Parameters.AddWithValue("$first_name", student.first_name);
+            cmd.Parameters.AddWithValue("$last_name", student.last_name);
+            cmd.Parameters.AddWithValue("$student_class", student.student_class);
+            cmd.Parameters.AddWithValue("$email_address", student.email_address);
+            cmd.Parameters.AddWithValue("$id", student.id);
 
-            using (var reader = await cmd.ExecuteReaderAsync())
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        /// <summary>
+        /// Inserts a new status into the database.
+        /// </summary>
+        /// <param name="status">The status object to be inserted.</param>
+        /// <returns></returns>
+        private async Task InsertStatus(Status status)
+        {
+            var cmd = connection!.CreateCommand();
+            cmd.CommandText = "INSERT INTO STATUS (name) VALUES ($name)";
+            cmd.Parameters.AddWithValue("$name", status.name);
+
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        /// <summary>
+        /// Updates an existing status in the database.
+        /// </summary>
+        /// <param name="status">The status object to be updated.</param>
+        /// <returns></returns>
+        private async Task UpdateStatus(Status status)
+        {
+            var cmd = connection!.CreateCommand();
+            cmd.CommandText = "UPDATE STATUS SET name = $name WHERE id = $id";
+            cmd.Parameters.AddWithValue("$name", status.name);
+            cmd.Parameters.AddWithValue("$id", status.id);
+
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        /// <summary>
+        /// Updates an existing message in the database.
+        /// </summary>
+        /// <param name="message">The message object to be updated.</param>
+        /// <returns></returns>
+        private async Task UpdateMessage(Message message)
+        {
+            var cmd = connection!.CreateCommand();
+            cmd.CommandText = "UPDATE MESSAGE SET student_id = $student_id, lesson_id = $lesson_id, title = $title, body = $body WHERE id = $id";
+            cmd.Parameters.AddWithValue("$student_id", message.student.id);
+
+            if (message.lesson != null)
             {
-                while (await reader.ReadAsync())
-                {
-                    int id = reader.GetInt32(0);
-                    string ip = reader.GetString(1);
-                    string timestampStr = reader.GetString(2);
-
-                    if (!DateTime.TryParse(timestampStr, out DateTime timestamp))
-                    {
-                        Util.Log($"Invalid timestamp format for request ID {id}. Expected format is YYYY-MM-DD HH:MM:SS.", LogLevel.Error);
-                        timestamp = DateTime.MinValue;
-                    }
-
-                    requests.Add(new Request(id, ip, timestamp));
-                }
+                cmd.Parameters.AddWithValue("$lesson_id", message.lesson.id);
             }
+            else
+            {
+                cmd.Parameters.AddWithValue("$lesson_id", DBNull.Value);
+            }
+
+            cmd.Parameters.AddWithValue("$title", message.title);
+            cmd.Parameters.AddWithValue("$body", message.body);
+            cmd.Parameters.AddWithValue("$id", message.id);
+
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+
+        /// <summary>
+        /// Updates an existing subject in the database.
+        /// </summary>
+        /// <param name="subject">The subject object to be updated.</param>
+        /// <returns></returns>
+        private async Task UpdateSubject(Subject subject)
+        {
+            var cmd = connection!.CreateCommand();
+            cmd.CommandText = "UPDATE SUBJECT SET name = $name, short = $short, teacher = $teacher, description = $description WHERE id = $id";
+            cmd.Parameters.AddWithValue("$name", subject.name);
+            cmd.Parameters.AddWithValue("$short", subject.shortcut);
+            cmd.Parameters.AddWithValue("$teacher", subject.teacher);
+            cmd.Parameters.AddWithValue("$description", subject.description);
+            cmd.Parameters.AddWithValue("$id", subject.id);
+
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        /// <summary>
+        /// Updates an existing start time in the database.
+        /// </summary>
+        /// <param name="startTime">The start time object to be updated.</param>
+        /// <returns></returns>
+        private async Task UpdateStartTime(StartTime startTime)
+        {
+            var cmd = connection!.CreateCommand();
+            cmd.CommandText = "UPDATE START_TIME SET time = $time WHERE id = $id";
+            cmd.Parameters.AddWithValue("$time", startTime.time);
+            cmd.Parameters.AddWithValue("$id", startTime.id);
+
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        /// <summary>
+        /// Updates an existing lesson in the database.
+        /// </summary>
+        /// <param name="lesson">The lesson object to be updated.</param>
+        /// <returns></returns>
+        private async Task UpdateLesson(Lesson lesson)
+        {
+            var cmd = connection!.CreateCommand();
+            cmd.CommandText = "UPDATE LESSON SET start_time_id = $start_time_id, date = $date, subject_id = $subject_id, student_id = $student_id, status_id = $status_id WHERE id = $id";
+            cmd.Parameters.AddWithValue("$start_time_id", lesson.start_time.id);
+            cmd.Parameters.AddWithValue("$date", lesson.date.ToString("yyyy-MM-dd"));
+            cmd.Parameters.AddWithValue("$subject_id", lesson.subject.id);
+            cmd.Parameters.AddWithValue("$student_id", lesson.student.id);
+            cmd.Parameters.AddWithValue("$status_id", lesson.status.id);
+            cmd.Parameters.AddWithValue("$id", lesson.id);
+
+            await cmd.ExecuteNonQueryAsync();
         }
 
         #endregion
